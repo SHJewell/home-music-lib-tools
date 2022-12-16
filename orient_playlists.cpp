@@ -7,10 +7,12 @@
 #include <filesystem>
 #include <sys/stat.h>
 #include <vector>
+#include <algorithm>
 
 // using namespace std;
 using namespace std::filesystem;
 
+std::string win_to_lin_path(std::string playlist_path);
 
 class fileInformation
 {
@@ -18,13 +20,14 @@ public:
     int numFiles {};
     path newPlaylistDir {};
     path origPlaylistDir {};
-    path musicFolder {};
+    path newMusicDir {};
+    path origMusicDir {};
     std::string extension {};
     std::vector<std::string> newPlaylists {};
     std::vector<std::string> origPlaylists {};
 
 public:
-    std::wstring DisplayPathInfo(path pathToDisplay)
+    std::wstring DisplayPathInfo(const path pathToDisplay)
     {
         // This path may or may not refer to an existing file. We are
         // examining this path string, not file system objects.
@@ -46,11 +49,15 @@ public:
             << L"stem() = " << pathToDisplay.stem() << std::endl
             << L"extension() = " << pathToDisplay.extension() << std::endl;
 
+        if (pathToDisplay.extension() == extension) {
+            crawlFile(pathToDisplay);
+        }
+
         return wos.str();
     }
 
 public:
-    void iterate_files(path curPath, bool iter_depth) {
+    void iterate_files(const path curPath, const bool iter_depth) {
 
         for (const auto& entry : directory_iterator(curPath)) {
 
@@ -67,12 +74,12 @@ public:
             }
             else if (is_regular_file(entry.path(), ec))
             {
-                std::size_t found = entry.path().string().find_last_of("/\\");
-                std::size_t second_to_last = entry.path().string().substr(0, found).find_last_of("/\\");
-                std::size_t ext_loc = entry.path().string().find_first_of(".");
+                // std::size_t found = entry.path().string().find_last_of("/\\");
+                // std::size_t second_to_last = entry.path().string().substr(0, found).find_last_of("/\\");
+                // std::size_t ext_loc = entry.path().string().find_first_of(".");
 
                 pathInfo = DisplayPathInfo(entry);
-                std::wcout << pathInfo << std::endl;
+                // std::wcout << pathInfo << std::endl;
 
                 /*
                 numFiles += 1;
@@ -101,9 +108,32 @@ public:
         iterate_files(origPlaylistDir, iter_depth);
     }
 
-/*
 public:
-    void write_file_list(std::string outputName) {
+    void crawlFile(const path filePath) {
+
+        std::ifstream file (filePath);
+        std::string str;
+        std::vector<std::string> file_contents;
+        int file_length = 0;
+
+        while (std::getline(file, str)) {
+            file_contents.push_back(str);
+            file_length += 1;
+        }
+
+        if (file_length > 0) {
+            std::cout << "Length: " << file_length << std::endl;
+            std::cout << "First entry: " << file_contents[0] << std::endl;
+            std::cout << "Edited entry: " << win_to_lin_path(file_contents[0]) << std::endl;
+            
+        }
+        else {
+            std::cout << "Error: " << filePath.string() << " empty!" << std::endl;
+        }
+    }
+
+public:
+    void write_file_list(const std::string outputName) {
 
         std::ofstream myfile;
         myfile.open(outputName);
@@ -111,9 +141,9 @@ public:
         myfile << "path,folder,name,extension\n";
 
         for (int i = 0; i < numFiles; i++) {
-            myfile << filePaths[i] << ",";
-            myfile << containingFolder[i] << ",";
-            myfile << fileNames[i] << ",";
+            // myfile << filePaths[i] << ",";
+            // myfile << containingFolder[i] << ",";
+            // myfile << fileNames[i] << ",";
             myfile << extension[i] << ",";
             myfile << "\n";
         }
@@ -123,9 +153,32 @@ public:
         std::cout << "File written to: " << outputName << std::endl;
 
     }
-*/
+
 
 };
+
+void edit_strings(const path music_path, std::string playlist_path) {
+
+    std::cout << playlist_path << std::endl;
+};
+
+std::string win_to_lin_path(std::string playlist_path) {
+/*
+win_to_lin_path
+
+Changes the slash direction and exit characters from Windows standard to Linux standard.
+*/
+
+    size_t start_pos = 0;
+
+    while ((start_pos = playlist_path.find("\\", start_pos)) != std::string::npos) {
+        playlist_path.replace(start_pos, 1, "/");
+        start_pos += 1;
+    }
+
+    return playlist_path;
+};
+
 
 
 int main() {
@@ -134,8 +187,11 @@ int main() {
 
     file_dir.origPlaylistDir = "/media/disc1/Music/Playlists/";
     file_dir.newPlaylistDir = "/home/shjewell/Music/Playlists/";
-    file_dir.musicFolder = "/home/shjewell/Music/Albums/";
+    file_dir.origMusicDir = "/home/shjewell/Music/Albums/";
+    file_dir.newMusicDir = "/";
     file_dir.extension = ".m3u";
+
+    // win_to_linux(file_dir.musicFolder, "E:\\Music\\Albums\\Ages and Ages\\Divisionary\\01-04- Big Idea.mp3");
 
     file_dir.crawlPath(false);
     
