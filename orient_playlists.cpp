@@ -2,6 +2,7 @@
 // compile by using: /EHsc /W4 /permissive- /std:c++17 (or later)
 #include <string>
 #include <iostream>
+#include <ostream>
 #include <sstream>
 #include <fstream>
 #include <filesystem>
@@ -10,194 +11,204 @@
 #include <algorithm>
 
 // using namespace std;
-using namespace std::filesystem;
+namespace fs = std::filesystem;
 
-std::string win_to_lin_path(std::string playlist_path);
+std::string win_to_lin_path(std::string old_path) {
+/*
+win_to_lin_path
+Changes the slash direction and exit characters from Windows standard to Linux standard.
 
-class fileInformation
-{
-public:
-    int numFiles {};
-    path newPlaylistDir {};
-    path origPlaylistDir {};
-    path newMusicDir {};
-    path origMusicDir {};
-    std::string extension {};
-    std::vector<std::string> newPlaylists {};
-    std::vector<std::string> origPlaylists {};
+Also, this is redundant with DisplayPathInfo for our purposes, but is more general
+*/
 
-public:
-    std::wstring DisplayPathInfo(const path pathToDisplay)
-    {
-        // This path may or may not refer to an existing file. We are
-        // examining this path string, not file system objects.
-        // path pathToDisplay(L"E:\Documents\Datasets\Weather Data\Copernicus ");
+    size_t start_pos = 0;
 
-        std::wostringstream wos;
-        int i = 0;
-        wos << L"Displaying path info for: " << pathToDisplay << std::endl;
-        for (path::iterator itr = pathToDisplay.begin(); itr != pathToDisplay.end(); ++itr)
-        {
-            wos << L"path part: " << i++ << L" = " << *itr << std::endl;
-        }
+    /*
+    if (old_path.find(":", 0) != std::end(old_path)) {
+        old_path = old_path.substr()
+    }
+    */
 
-        wos << L"root_name() = " << pathToDisplay.root_name() << std::endl
-            << L"root_path() = " << pathToDisplay.root_path() << std::endl
-            << L"relative_path() = " << pathToDisplay.relative_path() << std::endl
-            << L"parent_path() = " << pathToDisplay.parent_path() << std::endl
-            << L"filename() = " << pathToDisplay.filename() << std::endl
-            << L"stem() = " << pathToDisplay.stem() << std::endl
-            << L"extension() = " << pathToDisplay.extension() << std::endl;
-
-        if (pathToDisplay.extension() == extension) {
-            crawlFile(pathToDisplay);
-        }
-
-        return wos.str();
+    while ((start_pos = old_path.find("\\", start_pos)) != std::string::npos) {
+        old_path.replace(start_pos, 1, "/");
+        start_pos += 1;
     }
 
+    return old_path;
+};
+
+
+class dirObj
+{
 public:
-    void iterate_files(const path curPath, const bool iter_depth) {
+    int numFiles = 0;
+    int depthLimitFlag = false;
+    int depthLimit = 0;
+    int curDepth = 0;
+    fs::path baseDir {};
+    std::vector<std::string> files {};
+    std::vector<std::string> dicts {};
 
-        for (const auto& entry : directory_iterator(curPath)) {
+public:
+    void iterate_files(const fs::path curPath) {
 
-            // std::cout << entry.path() << std::endl;
+        for (const auto& entry : fs::directory_iterator(curPath)) {
 
             std::error_code ec;
-            std::wstring pathInfo;
 
-            if (is_directory(entry.path(), ec) && iter_depth == true) 
+            if (fs::is_directory(entry.path(), ec) && depthLimitFlag == false) 
+            {
+                fs::path newPath = entry.path();
+                dicts.push_back(newPath.string());
+                iterate_files(newPath);
+            }
+            else if (is_directory(entry.path(), ec) && depthLimitFlag == true) 
+            {
+                fs::path newPath = entry.path();
+                dicts.push_back(newPath.string());
+            }
+            /*
+            else if (is_directory(entry.path(), ec) && depthLimitFlag == true && depthLimit =< 1)
             {
                 path newPath = entry.path();
                 std::cout << newPath.string() << std::endl;
-                iterate_files(newPath, true);
+            } 
+            else if (is_directory(entry.path(), ec) && depthLimitFlag == true && depthLimit =< curDepth)
+            {
+                path newPath = entry.path();
+                std::cout << newPath.string() << std::endl;
+                iterate_files(newPath);
             }
+            */
             else if (is_regular_file(entry.path(), ec))
             {
-                // std::size_t found = entry.path().string().find_last_of("/\\");
-                // std::size_t second_to_last = entry.path().string().substr(0, found).find_last_of("/\\");
-                // std::size_t ext_loc = entry.path().string().find_first_of(".");
-
-                pathInfo = DisplayPathInfo(entry);
-                // std::wcout << pathInfo << std::endl;
-
-                /*
-                numFiles += 1;
-                filePaths.push_back(entry.path().string());
-                fileNames.push_back(entry.path().string().substr(found + 1));
-                containingFolder.push_back(entry.path().string().substr(second_to_last + 1, (found - second_to_last - 1)));
-                extension.push_back(entry.path().string().substr(ext_loc));
-                */
-                /*
-                std::cout << "path: " << entry.path().string().substr(0, found) << std::endl;
-                std::cout << "file: " << entry.path().string().substr(found+1) << std::endl;
-                */
+                numFiles++;
+                files.push_back(entry.path().string());
             }
         }
 
     }
 
 public:
-    void crawlPath(bool iter_depth) {
-        if (origPlaylistDir == "")
+    void startDirCrawl(bool iter_depth) {
+        if (baseDir.string() == "")
         {
             std::cout << "No path defined!" << std::endl;
             return;
         };
 
-        iterate_files(origPlaylistDir, iter_depth);
+        iterate_files(baseDir);
     }
 
 public:
-    void crawlFile(const path filePath) {
+    std::vector<std::string> selectByExt(const std::string ext) {
+
+        std::vector<std::string> filtered_files;
+        
+        for (auto filePathStr: files) {  
+
+            if (fs::path(filePathStr).extension() == ext) {
+                filtered_files.push_back(filePathStr);
+            }
+        }
+    
+        return filtered_files;
+    }
+};
+
+
+class playlistObj
+{
+public:
+    fs::path filePath {};
+    fs::path musicLib {};
+    std::string fileExt {};
+    size_t numEntries {};
+    std::vector<std::string> playlistContent {};
+
+public:
+    void crawlFile(const fs::path newPath) {
+
+        filePath = newPath;
+        fileExt = newPath.extension();
 
         std::ifstream file (filePath);
         std::string str;
-        std::vector<std::string> file_contents;
-        int file_length = 0;
 
         while (std::getline(file, str)) {
-            file_contents.push_back(str);
-            file_length += 1;
+            playlistContent.push_back(str);
+            numEntries++;
+        };
+
+        if (numEntries > 0) {
+             
+            std::cout << "Length: " << numEntries << std::endl;
+            std::cout << "First entry: " << playlistContent[0] << std::endl;
         }
 
-        if (file_length > 0) {
-            std::cout << "Length: " << file_length << std::endl;
-            std::cout << "First entry: " << file_contents[0] << std::endl;
-            std::cout << "Edited entry: " << win_to_lin_path(file_contents[0]) << std::endl;
-            
-        }
         else {
             std::cout << "Error: " << filePath.string() << " empty!" << std::endl;
         }
     }
 
 public:
-    void write_file_list(const std::string outputName) {
+    std::string changeInternalPath(std::string oldPath) {
+        /*
+        This is the one that will need the most care in the future, as it's based on my personal structure:
+        Albums/[aritst]/[album]/[tracks]
+        Which is inconsistent within my library (there are single tracks in the artist folder) and may not reflect other's library file structure
+        */
 
-        std::ofstream myfile;
-        myfile.open(outputName);
+        size_t album_idx = oldPath.find("Albums", oldPath.length());
+        fs::path new_path = musicLib / oldPath.substr(album_idx);
 
-        myfile << "path,folder,name,extension\n";
-
-        for (int i = 0; i < numFiles; i++) {
-            // myfile << filePaths[i] << ",";
-            // myfile << containingFolder[i] << ",";
-            // myfile << fileNames[i] << ",";
-            myfile << extension[i] << ",";
-            myfile << "\n";
-        }
-
-        myfile.close();
-
-        std::cout << "File written to: " << outputName << std::endl;
-
+        return win_to_lin_path(new_path.string());
     }
 
+public:
+    void gen_new_playlist(const fs::path newPath, std::string newName, std::string newExt) {
 
-};
 
-void edit_strings(const path music_path, std::string playlist_path) {
 
-    std::cout << playlist_path << std::endl;
-};
-
-std::string win_to_lin_path(std::string playlist_path) {
-/*
-win_to_lin_path
-
-Changes the slash direction and exit characters from Windows standard to Linux standard.
-*/
-
-    size_t start_pos = 0;
-
-    while ((start_pos = playlist_path.find("\\", start_pos)) != std::string::npos) {
-        playlist_path.replace(start_pos, 1, "/");
-        start_pos += 1;
     }
-
-    return playlist_path;
 };
-
 
 
 int main() {
 
-    fileInformation file_dir;
+    playlistObj pl;
+    pl.musicLib = "/media/disc1/Music/Albums";
 
+    // pl.crawlFile("/media/disc1/Music/Playlists/New.m3u");
+    std::string newpath = pl.changeInternalPath("E:\\Music\\Albums\\Andrew Bird\\Inside Problems\\01 - Underlands.mp3");
+
+    std::cout << newpath << std::endl;
+
+    /*
+    dirObj file_dir;
+    file_dir.baseDir = "/media/disc1/Music/Playlists/";
+    file_dir.depthLimitFlag = true;
+
+    file_dir.startDirCrawl(0);
+
+    for (std::string fileStr: file_dir.files) {
+        std::cout << fileStr << std::endl;
+    }
+
+    std::cout << "Filtered files: " << std::endl;
+    std::vector<std::string> playlists = file_dir.selectByExt(".m3u");
+
+    for (std::string fileStr: playlists) {
+        std::cout << fileStr << std::endl;
+    }
+
+    */
+
+    /*
     file_dir.origPlaylistDir = "/media/disc1/Music/Playlists/";
     file_dir.newPlaylistDir = "/home/shjewell/Music/Playlists/";
     file_dir.origMusicDir = "/home/shjewell/Music/Albums/";
     file_dir.newMusicDir = "/";
     file_dir.extension = ".m3u";
-
-    // win_to_linux(file_dir.musicFolder, "E:\\Music\\Albums\\Ages and Ages\\Divisionary\\01-04- Big Idea.mp3");
-
-    file_dir.crawlPath(false);
-    
-    //wcout << DisplayPathInfo(L"E:\Documents\Datasets\Weather Data\Copernicus ") << endl;
-    // wcout << ComparePaths() << endl; // see following example
-    // wcout << endl << L"Press Enter to exit" << endl;
-    // wstring input;
-    // getline(wcin, input);
+    */
 }
